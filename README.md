@@ -21,8 +21,8 @@ Device Board のウィジェットのように、**Claude と Gemini の「5時�
 | 項目 | 状態 |
 |---|---|
 | Claude の取得元 | **非公式**。Claude Code の OAuth トークンで usage エンドポイントを叩く。`five_hour` / `seven_day` / `utilization` / `resets_at` の項目名は複数の公開実装で一致を確認。**実機では未実行** |
-| Gemini の取得元 | **非公式**。Gemini の5時間・週間枠は **Antigravity（`agy` CLI）側** の仕様（対象が Antigravity の枠であることは本人に確認済み）。Gemini CLI の個人向け OAuth は 2026-06-18 に終了済み（CodexBar の docs による）。`agy -p /usage --output-format json` の**生JSONの形は未確認**で、公開 docs の項目名（`groups[].buckets[].remaining.remainingFraction` など）から推測したパーサ |
-| テスト | パーサの単体テスト 12 件は通過。ただし入力は**合成データ**（実機出力ではない）。Scriptable は API モックでの実行確認のみで、**実機の描画は未確認** |
+| Gemini の取得元 | **非公式**だが**実機で動作確認済み**。5時間・週間枠は **Antigravity（`agy` CLI）側** の仕様（対象が Antigravity の枠であることは本人に確認済み）。`agy -p /usage --output-format json` の実出力（`command.data.groups[].buckets[]`、`remaining_fraction` / `reset_time`）に合わせたパーサ。Gemini CLI の個人向け OAuth は 2026-06-18 に終了済み（CodexBar の docs による） |
+| テスト | 単体テスト 14 件。Gemini の入力は**実機出力そのもの**、Claude の入力は合成データ。Scriptable は API モックでの実行確認のみで、**実機の描画は未確認** |
 | 対象外 | Gemini アプリ（チャット画面）自体の残量。取得手段が見つかっていない |
 | 更新される条件 | **Mac が起動している間だけ**。Mac がスリープ中は iPhone の表示も古くなる（古いと「⚠︎ 古いデータ」表示） |
 
@@ -59,7 +59,8 @@ Gemini の Claude+GPT 枠も出したい場合は `AIUsage.js` の `geminiGroups
 | `Claude のトークンが無効/期限切れ` | Claude Code を一度起動（トークン更新は Claude Code 側に任せ、本ツールは更新しない設計） |
 | Claude の認証情報が見つからない | macOS では Keychain の `Claude Code-credentials`（サービス名は未検証）または `~/.claude/.credentials.json`。環境変数 `CLAUDE_OAUTH_TOKEN` でも指定可 |
 | `agy が見つかりません` | `ANTIGRAVITY_CLI_PATH` を指定、または PATH を確認 |
-| Gemini が「出力を解釈できません」「バケットがありません」 | `python3 collector/ai_usage.py raw gemini` の結果を共有 → パーサを実形式に合わせる |
+| Gemini が「出力を解釈できません」「バケットがありません」 | `python3 collector/ai_usage.py raw gemini` の結果を確認（`agy` のバージョン更新で形式が変わった可能性） |
+| Claude の accessToken を取得できません | `python3 collector/ai_usage.py diagnose`（トークンの値は出さず、構造だけ表示） |
 | iPhone が「データなし/古い」 | Mac のスリープ・iCloud Drive の同期・`~/.ai-usage/collector.log` を確認 |
 
 ## 開発

@@ -1,8 +1,8 @@
 """パーサのテスト。
 
-注意: ここの入力は「公開情報（CodexBar docs 等）に書かれた項目名」から作った合成データで、
-実機の生レスポンスではない。実機出力で形が違えば `ai_usage.py raw <provider>` の結果を
-基にフィクスチャとパーサを直すこと。
+- Gemini: AGY_REAL は実機（agy -p /usage --output-format json）の出力そのもの（2026-11-02 取得）。
+- Claude: 入力は公開情報の項目名から作った合成データ（実機の Claude 応答は未確認）。
+実機で形が違えば `ai_usage.py raw <provider>` の結果を基にフィクスチャとパーサを直すこと。
 """
 import json
 import sys
@@ -46,53 +46,83 @@ class ClaudeParse(unittest.TestCase):
             au.token_from_credentials({})
 
 
-class AgyParse(unittest.TestCase):
-    FIXTURE = {
-        "groups": [
-            {"displayName": "Gemini Models", "buckets": [
-                {"bucketId": "gemini-five-hour", "displayName": "Five-hour limit", "window": "FIVE_HOUR",
-                 "remaining": {"remainingFraction": 0.82}, "description": "Resets in 2h 14m"},
-                {"bucketId": "gemini-weekly", "displayName": "Weekly limit", "window": "WEEKLY",
-                 "remaining": {"remainingFraction": 0.65}, "description": "Resets in 6d 3h"},
-            ]},
-            {"displayName": "Claude and GPT models", "buckets": [
-                {"bucketId": "cg-weekly", "displayName": "Weekly limit",
-                 "remaining": {"remainingFraction": 1}},
-                {"bucketId": "cg-five-hour", "displayName": "Five-hour limit",
-                 "remaining": {"remainingFraction": 0.5}},
-            ]},
-        ]
-    }
+AGY_REAL = {
+    "status": "SUCCESS",
+    "command": {"name": "usage", "data": {"groups": [
+        {"name": "Gemini Models", "buckets": [
+            {"id": "gemini-weekly", "name": "Weekly Limit Remaining",
+             "description": "You have used some of your weekly limit, it will fully refresh in 4 days, 19 hours.",
+             "window": "weekly", "remaining_fraction": 0.966158926486969, "reset_time": "2026-11-07T13:33:59Z"},
+            {"id": "gemini-5h", "name": "Five Hour Limit Remaining", "window": "5h",
+             "remaining_fraction": 1, "reset_time": "2026-11-02T22:37:55Z"}]},
+        {"name": "Claude and GPT models", "buckets": [
+            {"id": "3p-weekly", "name": "Weekly Limit Remaining", "window": "weekly",
+             "remaining_fraction": 1, "reset_time": "2026-11-09T17:37:55Z"},
+            {"id": "3p-5h", "name": "Five Hour Limit Remaining", "window": "5h",
+             "remaining_fraction": 1, "reset_time": "2026-11-02T22:37:55Z"}]},
+        {"name": "Gemini 4 Argon", "buckets": [
+            {"id": "gemini-argon-wtu-weekly", "name": "Gemini 4 Argon Weekly Limit", "window": "weekly",
+             "remaining_fraction": 1, "reset_time": "2026-11-09T04:38:15Z"}]},
+    ]}},
+}
 
-    def test_groups_and_order(self):
-        w = au.parse_agy_usage(self.FIXTURE)
+
+class AgyParse(unittest.TestCase):
+    def test_real_output(self):
+        w = au.parse_agy_usage(AGY_REAL)
         self.assertEqual([(x["group"], x["kind"]) for x in w], [
             ("Gemini", "five_hour"), ("Gemini", "weekly"),
             ("Claude+GPT", "five_hour"), ("Claude+GPT", "weekly"),
+            ("Gemini 4 Argon", "weekly"),
         ])
-        self.assertEqual(w[0]["remaining_percent"], 82.0)
-        self.assertEqual(w[0]["used_percent"], 18.0)
-        self.assertEqual(w[0]["reset_text"], "Resets in 2h 14m")
+        self.assertEqual(w[0]["remaining_percent"], 100.0)
+        self.assertEqual(w[1]["remaining_percent"], 96.6)
+        self.assertEqual(w[1]["resets_at"], "2026-11-07T13:33:59Z")
+        self.assertIn("4 days", w[1]["reset_text"])
 
-    def test_wrapped_in_other_keys(self):
-        w = au.parse_agy_usage({"command": "usage", "report": self.FIXTURE})
-        self.assertEqual(len(w), 4)
+    def test_argon_is_not_merged_into_gemini(self):
+        ids = [x["id"] for x in au.parse_agy_usage(AGY_REAL)]
+        self.assertEqual(len(ids), len(set(ids)))
+        gemini = [x for x in au.parse_agy_usage(AGY_REAL) if x["group"] == "Gemini"]
+        self.assertEqual(len(gemini), 2)
+
+    def test_docs_style_keys_still_accepted(self):
+        data = {"groups": [{"displayName": "Gemini Models", "buckets": [
+            {"bucketId": "g", "window": "WEEKLY", "remaining": {"remainingFraction": 0.5},
+             "resetTime": "2026-11-07T00:00:00Z"}]}]}
+        w = au.parse_agy_usage(data)
+        self.assertEqual((w[0]["kind"], w[0]["remaining_percent"], w[0]["resets_at"]),
+                         ("weekly", 50.0, "2026-11-07T00:00:00Z"))
 
     def test_unknown_remaining_is_dropped_not_invented(self):
-        data = {"groups": [{"displayName": "Gemini", "buckets": [
-            {"bucketId": "a", "window": "weekly", "resetTime": "2026-11-05T00:00:00Z"}]}]}
+        data = {"groups": [{"name": "Gemini Models", "buckets": [
+            {"id": "a", "window": "weekly", "reset_time": "2026-11-05T00:00:00Z"}]}]}
         with self.assertRaises(au.ProviderError):
             au.parse_agy_usage(data)
-
-    def test_cadence_falls_back_to_bucket_id(self):
-        data = {"groups": [{"displayName": "Gemini", "buckets": [
-            {"bucketId": "gemini_weekly", "remaining": {"remainingFraction": 0.3}}]}]}
-        self.assertEqual(au.parse_agy_usage(data)[0]["kind"], "weekly")
 
     def test_json_loose(self):
         self.assertEqual(au.parse_json_loose('noise\n{"a": 1}\n'), {"a": 1})
         with self.assertRaises(au.ProviderError):
             au.parse_json_loose("not json")
+
+
+class ClaudeToken(unittest.TestCase):
+    def test_empty_keychain_token_falls_back_to_file(self):
+        import os
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / ".credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": "FILE_TOKEN"}}))
+            fake = mock.Mock(returncode=0, stdout=json.dumps({"claudeAiOauth": {"accessToken": ""}}))
+            with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": d}, clear=False), \
+                 mock.patch.object(au.sys, "platform", "darwin"), \
+                 mock.patch.object(au.subprocess, "run", return_value=fake):
+                os.environ.pop("CLAUDE_OAUTH_TOKEN", None)
+                self.assertEqual(au.read_claude_token(), "FILE_TOKEN")
+
+    def test_diagnose_never_prints_values(self):
+        masked = au._mask({"claudeAiOauth": {"accessToken": "SECRET123", "expiresAt": 1730000000, "scopes": ["a"]}})
+        self.assertNotIn("SECRET123", json.dumps(masked))
+        self.assertEqual(masked["claudeAiOauth"]["accessToken"], "<str len=9>")
 
 
 class Aggregate(unittest.TestCase):

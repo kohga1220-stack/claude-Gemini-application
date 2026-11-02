@@ -13,6 +13,7 @@ Mac 上で定期実行し、正規化した usage.json を書き出す。
   ai_usage.py collect            # 取得して usage.json を更新（既定）
   ai_usage.py show               # usage.json を表で表示
   ai_usage.py raw claude|gemini  # 生レスポンスを表示（パーサ調整用）
+  ai_usage.py diagnose           # Claude 認証情報の構造のみ表示（トークン値は出さない）
 """
 from __future__ import annotations
 
@@ -71,16 +72,61 @@ def read_claude_token() -> str:
             )
             if r.returncode == 0 and r.stdout.strip():
                 return token_from_credentials(json.loads(r.stdout))
-        except (OSError, subprocess.SubprocessError, ValueError):
-            pass
+        except (OSError, subprocess.SubprocessError, ValueError, ProviderError):
+            pass  # Keychain が空/別形式でもファイル側を試す
     cfg = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
     path = cfg / ".credentials.json"
     try:
         return token_from_credentials(json.loads(path.read_text()))
-    except (OSError, ValueError):
+    except (OSError, ValueError, ProviderError):
         raise ProviderError(
-            "Claude Code の認証情報が見つかりません（Claude Code でログインしてください）"
+            "Claude の accessToken を取得できません（Keychain/ファイルとも空か未存在）。"
+            "`ai_usage.py diagnose` の出力を確認してください"
         ) from None
+
+
+def _mask(v):
+    """値は出さず、型と長さだけ返す（診断用）。"""
+    if isinstance(v, dict):
+        return {k: _mask(x) for k, x in v.items()}
+    if isinstance(v, str):
+        return f"<str len={len(v)}>"
+    if isinstance(v, (bool, int, float)):
+        return v  # expiresAt などの数値・真偽値は秘密ではない
+    if isinstance(v, list):
+        return f"<list len={len(v)}>"
+    return f"<{type(v).__name__}>"
+
+
+def diagnose_claude() -> dict:
+    """認証情報の「構造」だけを出す。トークン等の値は一切出さない。"""
+    info = {"env_CLAUDE_OAUTH_TOKEN": bool(os.environ.get("CLAUDE_OAUTH_TOKEN"))}
+    if sys.platform == "darwin":
+        try:
+            meta = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE],
+                                  capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+            # 属性行のみ（-w を付けないのでパスワードは含まれない）
+            info["keychain_attrs"] = [l.strip() for l in meta.stdout.splitlines()
+                                      if l.strip().startswith(('"acct"', '"svce"', "keychain:"))]
+            info["keychain_found"] = meta.returncode == 0
+            pw = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+                                capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+            if pw.returncode == 0:
+                try:
+                    info["keychain_structure"] = _mask(json.loads(pw.stdout))
+                except ValueError:
+                    info["keychain_structure"] = f"<non-json len={len(pw.stdout.strip())}>"
+        except (OSError, subprocess.SubprocessError) as e:
+            info["keychain_error"] = str(e)
+    cfg = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
+    f = cfg / ".credentials.json"
+    info["credentials_file_exists"] = f.exists()
+    if f.exists():
+        try:
+            info["credentials_file_structure"] = _mask(json.loads(f.read_text()))
+        except (OSError, ValueError):
+            info["credentials_file_structure"] = "<unreadable>"
+    return info
 
 
 def fetch_claude_usage(token: str, timeout: int = 15) -> dict:
@@ -195,26 +241,29 @@ def _cadence(*texts) -> str:
 
 
 def _short_group(name: str) -> str:
-    low = name.lower()
-    if "gemini" in low:
-        return "Gemini"
+    low = name.lower().strip()
     if "claude" in low or "gpt" in low:
         return "Claude+GPT"
-    return name
+    if low in ("gemini", "gemini models"):
+        return "Gemini"
+    return name  # 例: "Gemini 4 Argon" は別枠のまま残す
 
 
 _KIND_LABEL = {"five_hour": "5時間", "weekly": "週間", "other": ""}
 
 
 def parse_agy_usage(data) -> list:
-    """`groups[].buckets[].remaining.remainingFraction` を再帰的に探して windows 化。
-    CodexBar の docs/antigravity.md が記す項目名に基づく。実機の生出力での検証は未了。"""
+    """`command.data.groups[].buckets[]` を再帰的に探して windows 化。
+
+    実機出力（agy -p /usage --output-format json）で確認した形:
+      bucket = {id, name, window: "weekly"|"5h", remaining_fraction: 0-1, reset_time: ISO, description?}
+    CodexBar docs の別形式（remaining.remainingFraction / resetTime）も受け付ける。"""
     windows, seen = [], set()
 
     def walk(node):
         if isinstance(node, dict):
             if isinstance(node.get("buckets"), list):
-                group_name = str(node.get("displayName") or node.get("name") or "")
+                group_name = str(node.get("name") or node.get("displayName") or "")
                 for b in node["buckets"]:
                     add_bucket(group_name, b)
             for v in node.values():
@@ -227,24 +276,30 @@ def parse_agy_usage(data) -> list:
         if not isinstance(b, dict):
             return
         rem = b.get("remaining") if isinstance(b.get("remaining"), dict) else b
-        frac = rem.get("remainingFraction")
-        if not isinstance(frac, (int, float)):
+        frac = rem.get("remaining_fraction")
+        if frac is None:
+            frac = rem.get("remainingFraction")
+        if isinstance(frac, bool) or not isinstance(frac, (int, float)):
             return  # 使用量不明のバケットは捏造せず捨てる
         frac = min(1.0, max(0.0, float(frac)))
-        kind = _cadence(b.get("window"), b.get("bucketId"), b.get("displayName"))
+        bid = b.get("id") or b.get("bucketId")
+        bname = b.get("name") or b.get("displayName")
+        kind = _cadence(b.get("window"), bid, bname)
         group = _short_group(group_name) if group_name else "Gemini"
-        key = (group_name, kind, b.get("bucketId"))
+        key = (group_name, kind, bid)
         if key in seen:
             return
         seen.add(key)
         desc = b.get("description")
+        slug = "".join(c if c.isalnum() else "_" for c in group.lower())
         windows.append({
-            "id": f"{group.lower().replace('+', '_')}_{kind}",
-            "label": _KIND_LABEL[kind] or str(b.get("displayName") or b.get("bucketId") or "?"),
+            "id": f"{slug}_{kind}",
+            "label": _KIND_LABEL[kind] or str(bname or bid or "?"),
             "kind": kind, "group": group,
             "used_percent": round((1.0 - frac) * 100, 1),
             "remaining_percent": round(frac * 100, 1),
-            "resets_at": b.get("resetTime") or rem.get("resetTime") or b.get("resets_at"),
+            "resets_at": (b.get("reset_time") or b.get("resetTime") or b.get("resets_at")
+                          or rem.get("reset_time") or rem.get("resetTime")),
             "reset_text": desc if isinstance(desc, str) else None,
         })
 
@@ -350,6 +405,11 @@ def cmd_raw(args) -> int:
     return 0
 
 
+def cmd_diagnose(args) -> int:
+    print(json.dumps(diagnose_claude(), ensure_ascii=False, indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")
@@ -360,12 +420,13 @@ def main(argv=None) -> int:
     s.add_argument("--file")
     r = sub.add_parser("raw", help="生レスポンスを表示")
     r.add_argument("provider", choices=sorted(PROVIDERS))
+    sub.add_parser("diagnose", help="Claude 認証情報の構造を表示（値は出さない）")
     args = ap.parse_args(argv)
     if args.cmd in (None, "collect"):
         if args.cmd is None:
             args = ap.parse_args(["collect"])
         return cmd_collect(args)
-    return {"show": cmd_show, "raw": cmd_raw}[args.cmd](args)
+    return {"show": cmd_show, "raw": cmd_raw, "diagnose": cmd_diagnose}[args.cmd](args)
 
 
 if __name__ == "__main__":
