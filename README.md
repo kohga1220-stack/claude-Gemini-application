@@ -21,7 +21,7 @@ Device Board のウィジェットのように、**Claude と Gemini の「5時�
 | 項目 | 状態 |
 |---|---|
 | Claude の取得元 | **非公式**。Claude Code の OAuth トークンで usage エンドポイントを叩く。`five_hour` / `seven_day` / `utilization` / `resets_at` の項目名は複数の公開実装で一致を確認。**実機では未実行** |
-| Gemini の取得元 | **非公式**。Gemini の5時間・週間枠は **Antigravity（`agy` CLI）側** の仕様。Gemini CLI の個人向け OAuth は 2026-06-18 に終了済み（CodexBar の docs による）。`agy -p /usage --output-format json` の**生JSONの形は未確認**で、公開 docs の項目名（`groups[].buckets[].remaining.remainingFraction` など）から推測したパーサ |
+| Gemini の取得元 | **非公式**。Gemini の5時間・週間枠は **Antigravity（`agy` CLI）側** の仕様（対象が Antigravity の枠であることは本人に確認済み）。Gemini CLI の個人向け OAuth は 2026-06-18 に終了済み（CodexBar の docs による）。`agy -p /usage --output-format json` の**生JSONの形は未確認**で、公開 docs の項目名（`groups[].buckets[].remaining.remainingFraction` など）から推測したパーサ |
 | テスト | パーサの単体テスト 12 件は通過。ただし入力は**合成データ**（実機出力ではない）。Scriptable は API モックでの実行確認のみで、**実機の描画は未確認** |
 | 対象外 | Gemini アプリ（チャット画面）自体の残量。取得手段が見つかっていない |
 | 更新される条件 | **Mac が起動している間だけ**。Mac がスリープ中は iPhone の表示も古くなる（古いと「⚠︎ 古いデータ」表示） |
