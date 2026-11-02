@@ -31,7 +31,7 @@ sed -e "s|__PYTHON__|$PYTHON|g" -e "s|__COLLECTOR__|$ROOT/collector/ai_usage.py|
 
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
 launchctl bootstrap "$DOMAIN" "$PLIST"
-echo "launchd 登録: $PLIST（5分ごと）"
+echo "launchd 登録: ${PLIST}（5分ごと）"
 
 PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)"
 if [[ -n "$PLUGIN_DIR" && -d "$PLUGIN_DIR" ]]; then
