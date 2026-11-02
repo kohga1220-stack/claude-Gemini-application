@@ -124,7 +124,7 @@ async function build() {
   const f = new DateFormatter(); f.dateFormat = "HH:mm";
   const foot = w.addText(isNaN(gen) ? "取得時刻不明" : `取得 ${f.string(gen)}${fromCache ? "（キャッシュ）" : ""}${old ? "  ⚠︎ 古いデータ" : ""}`);
   foot.font = Font.systemFont(9); foot.textColor = old ? C.warn : C.sub;
-  w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+  w.refreshAfterDate = new Date(Date.now() + 1 * 60 * 1000);  // 早めの更新を希望（実際の更新タイミングは iOS が決める）
   return w;
 }
 

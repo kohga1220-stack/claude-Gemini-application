@@ -25,6 +25,7 @@ Device Board のウィジェットのように、**Claude と Gemini の「5時�
 | Gemini の取得元 | **非公式**だが**実機で動作確認済み**。5時間・週間枠は **Antigravity（`agy` CLI）側** の仕様（対象が Antigravity の枠であることは本人に確認済み）。`agy -p /usage --output-format json` の実出力（`command.data.groups[].buckets[]`、`remaining_fraction` / `reset_time`）に合わせたパーサ。Gemini CLI の個人向け OAuth は 2026-06-18 に終了済み（CodexBar の docs による） |
 | テスト | 単体テスト 17 件（Gemini の入力は実機出力そのもの、Claude の入力は合成データ）。Scriptable は **iPhone 実機で Scriptable 内のプレビュー表示を確認済み**（Claude/Gemini の5時間・週間、リセットまでの時間）。ホーム画面のウィジェットとしての更新頻度は iOS 任せで未検証 |
 | 対象外 | Gemini アプリ（チャット画面）自体の残量。取得手段が見つかっていない |
+| iPhone の更新間隔 | `refreshAfterDate` は「早めに更新してほしい」という希望（現在1分）で、実際の更新タイミングは iOS が決める。目安は15分〜1時間おき（一般的な iOS の挙動で、実機での計測値ではない）。画面の「取得 HH:mm」で鮮度を確認する |
 | 更新される条件 | **Mac が起動している間だけ**。Mac がスリープ中は iPhone の表示も古くなる（古いと「⚠︎ 古いデータ」表示） |
 
 非公式 API は予告なく変わります。壊れたら `ai_usage.py raw <provider>` の出力を見てパーサを直してください。
