@@ -156,6 +156,17 @@ def fetch_claude_usage(token: str, timeout: int = 15) -> dict:
 
 
 _CLAUDE_LABELS = {"five_hour": ("5時間", "five_hour"), "seven_day": ("週間", "weekly")}
+# レート制限の枠ではない項目。iguana_necktie はプロモーションのクラウドセッション・クレジット
+# （CodexBar docs/claude.md）。omelette_promotional も同系統の内部/プロモ用フィールド。
+_CLAUDE_NON_WINDOW_KEYS = {"iguana_necktie", "omelette_promotional", "extra_usage"}
+
+
+def _claude_label(key: str):
+    if key in _CLAUDE_LABELS:
+        return _CLAUDE_LABELS[key]
+    if key.startswith("seven_day_"):  # モデル別の週間枠（例: seven_day_opus）
+        return "週間 " + key[len("seven_day_"):].replace("_", " ").title(), "other"
+    return key, "other"
 
 
 def parse_claude(resp: dict) -> list:
@@ -165,13 +176,15 @@ def parse_claude(resp: dict) -> list:
     if not isinstance(resp, dict):
         raise ProviderError("Claude usage の応答形式が想定外です")
     for key, val in resp.items():
+        if key in _CLAUDE_NON_WINDOW_KEYS:
+            continue
         if not isinstance(val, dict) or val.get("utilization") is None:
             continue
         try:
             used = float(val["utilization"])
         except (TypeError, ValueError):
             continue
-        label, kind = _CLAUDE_LABELS.get(key, (key, "other"))
+        label, kind = _claude_label(key)
         windows.append({
             "id": key, "label": label, "kind": kind, "group": "Claude",
             "used_percent": round(used, 1),

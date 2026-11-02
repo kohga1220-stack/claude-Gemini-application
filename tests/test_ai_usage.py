@@ -32,6 +32,20 @@ class ClaudeParse(unittest.TestCase):
         kinds = {x["id"]: x["kind"] for x in au.parse_claude(resp)}
         self.assertEqual(kinds["seven_day_fable"], "other")
 
+    def test_promo_credit_field_is_not_a_rate_window(self):
+        # 実機で iguana_necktie が「残り0%の枠」として出た不具合の回帰テスト
+        resp = {"five_hour": {"utilization": 13.0, "resets_at": "a"},
+                "seven_day": {"utilization": 5.0, "resets_at": "b"},
+                "iguana_necktie": {"utilization": 100.0, "resets_at": "c"},
+                "omelette_promotional": {"utilization": 100.0}}
+        ids = [x["id"] for x in au.parse_claude(resp)]
+        self.assertEqual(ids, ["five_hour", "seven_day"])
+
+    def test_per_model_weekly_label(self):
+        w = au.parse_claude({"five_hour": {"utilization": 1}, "seven_day_opus": {"utilization": 40}})
+        opus = [x for x in w if x["id"] == "seven_day_opus"][0]
+        self.assertEqual((opus["label"], opus["kind"], opus["remaining_percent"]), ("週間 Opus", "other", 60.0))
+
     def test_over_100_is_clamped(self):
         w = au.parse_claude({"five_hour": {"utilization": 130}})
         self.assertEqual(w[0]["remaining_percent"], 0.0)
