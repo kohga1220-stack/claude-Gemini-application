@@ -49,9 +49,9 @@ function bar(width, frac, color) {
   const ctx = new DrawContext();
   ctx.size = new Size(width, 5); ctx.opaque = false; ctx.respectScreenScale = true;
   ctx.setFillColor(C.track);
-  ctx.fillPath(Path.roundedRect(new Rect(0, 0, width, 5), 2.5, 2.5));
+  ctx.fillRect(new Rect(0, 0, width, 5));
   const w = Math.max(0, Math.min(1, frac)) * width;
-  if (w > 0) { ctx.setFillColor(color); ctx.fillPath(Path.roundedRect(new Rect(0, 0, w, 5), 2.5, 2.5)); }
+  if (w > 0) { ctx.setFillColor(color); ctx.fillRect(new Rect(0, 0, w, 5)); }
   return ctx.getImage();
 }
 
