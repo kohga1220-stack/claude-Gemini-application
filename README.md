@@ -20,7 +20,7 @@ Device Board のウィジェットのように、**Claude と Gemini の「5時�
 
 | 項目 | 状態 |
 |---|---|
-| Claude の取得元 | **非公式**。Claude Code の OAuth トークンで usage エンドポイントを叩く。`five_hour` / `seven_day` / `utilization` / `resets_at` の項目名は複数の公開実装で一致を確認。**実機では未実行** |
+| Claude の取得元 | **非公式**だが**実機で動作確認済み**。Claude Code の OAuth トークンで usage エンドポイントを叩く。`five_hour` / `seven_day` の使用率・リセット時刻が claude.ai の「ご利用状況」画面の表示と一致することを確認（2026-11-03、1回分の照合）。`iguana_necktie` などのプロモーション用フィールドは枠として表示しない |
 | Gemini の取得元 | **非公式**だが**実機で動作確認済み**。5時間・週間枠は **Antigravity（`agy` CLI）側** の仕様（対象が Antigravity の枠であることは本人に確認済み）。`agy -p /usage --output-format json` の実出力（`command.data.groups[].buckets[]`、`remaining_fraction` / `reset_time`）に合わせたパーサ。Gemini CLI の個人向け OAuth は 2026-06-18 に終了済み（CodexBar の docs による） |
 | テスト | 単体テスト 14 件。Gemini の入力は**実機出力そのもの**、Claude の入力は合成データ。Scriptable は API モックでの実行確認のみで、**実機の描画は未確認** |
 | 対象外 | Gemini アプリ（チャット画面）自体の残量。取得手段が見つかっていない |
