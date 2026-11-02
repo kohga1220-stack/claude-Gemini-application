@@ -62,6 +62,7 @@ Gemini の Claude+GPT 枠も出したい場合は `AIUsage.js` の `geminiGroups
 | `agy が見つかりません` | `ANTIGRAVITY_CLI_PATH` を指定、または PATH を確認 |
 | Gemini が「出力を解釈できません」「バケットがありません」 | `python3 collector/ai_usage.py raw gemini` の結果を確認（`agy` のバージョン更新で形式が変わった可能性） |
 | Claude の accessToken を取得できません | `python3 collector/ai_usage.py diagnose`（トークンの値は出さず、構造だけ表示） |
+| ウィジェットが `null is not an object (data.providers)` で落ちる（旧版） | 自動更新時に iCloud 上の usage.json が未取得で読み込みが空になるのが原因。現行版は読めた値を端末内にキャッシュし、読めない時はそれを「（キャッシュ）」付きで表示する。直らなければスクリプトを最新版に貼り直す |
 | ウィジェットに「usage.json がありません」 | Mac で `python3 collector/ai_usage.py collect` を実行し、出力の `wrote:` に `iCloud~dk~simonbs~Scriptable` を含むパスがあるか確認。なければ Mac のターミナルで `ls ~/Library/Mobile\ Documents/ | grep -i scriptable` |
 | iPhone が「データなし/古い」 | Mac のスリープ・iCloud Drive の同期・`~/.ai-usage/collector.log` を確認 |
 

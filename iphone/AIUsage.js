@@ -19,19 +19,39 @@ const C = {
   claude: new Color("#D97757"), gemini: new Color("#4285F4"),
 };
 
+function validData(j) { return j && typeof j === "object" && j.providers && typeof j.providers === "object"; }
+
 async function loadData() {
   // Mac の collector が iCloud Drive/Scriptable/usage.json に書いた値を読む（ブックマーク登録は不要）。
-  const fm = FileManager.iCloud();
-  const p = fm.joinPath(fm.documentsDirectory(), "usage.json");
+  // ホーム画面の自動更新では iCloud 上のファイルが未取得で読めないことがあるため、
+  // 読めた最新の値を端末内にキャッシュし、読めない時はそれを表示する（古ければ「古いデータ」表示）。
+  const icloud = FileManager.iCloud();
+  const local = FileManager.local();
+  const p = icloud.joinPath(icloud.documentsDirectory(), "usage.json");
+  const cachePath = local.joinPath(local.documentsDirectory(), "ai-usage-cache.json");
+
   try {
-    if (!fm.fileExists(p)) {
-      return { error: "usage.json がありません。Mac で collect を実行し、iCloud の同期を待ってください" };
+    if (icloud.fileExists(p)) {
+      if (!icloud.isFileDownloaded(p)) await icloud.downloadFileFromiCloud(p);
+      const raw = icloud.readString(p);          // 未取得だと null が返る
+      if (raw) {
+        const j = JSON.parse(raw);
+        if (validData(j)) {
+          try { local.writeString(cachePath, raw); } catch (e) {}
+          return { data: j };
+        }
+      }
     }
-    if (!fm.isFileDownloaded(p)) await fm.downloadFileFromiCloud(p);
-    return { data: JSON.parse(fm.readString(p)) };
-  } catch (e) {
-    return { error: "usage.json を読めません（Mac の collector が動いているか確認）" };
-  }
+  } catch (e) { /* キャッシュへ */ }
+
+  try {
+    if (local.fileExists(cachePath)) {
+      const j = JSON.parse(local.readString(cachePath));
+      if (validData(j)) return { data: j, fromCache: true };
+    }
+  } catch (e) { /* エラー表示へ */ }
+
+  return { error: "usage.json を読めません。Mac の collector と iCloud の同期を確認し、アプリで▶を押してください" };
 }
 
 function remainingColor(r) { return r <= 10 ? C.bad : r <= 30 ? C.warn : C.ok; }
@@ -90,7 +110,7 @@ function addProvider(parent, name, title, accent, pr) {
 async function build() {
   const w = new ListWidget();
   w.backgroundColor = C.bg; w.setPadding(12, 14, 10, 14);
-  const { data, error } = await loadData();
+  const { data, error, fromCache } = await loadData();
   if (error) {
     const t = w.addText(error); t.font = Font.systemFont(11); t.textColor = C.warn; return w;
   }
@@ -102,7 +122,7 @@ async function build() {
   const gen = new Date(data.generated_at);
   const old = isNaN(gen) || (new Date() - gen) / 60000 > CONFIG.staleMinutes;
   const f = new DateFormatter(); f.dateFormat = "HH:mm";
-  const foot = w.addText(isNaN(gen) ? "取得時刻不明" : `取得 ${f.string(gen)}${old ? "  ⚠︎ 古いデータ" : ""}`);
+  const foot = w.addText(isNaN(gen) ? "取得時刻不明" : `取得 ${f.string(gen)}${fromCache ? "（キャッシュ）" : ""}${old ? "  ⚠︎ 古いデータ" : ""}`);
   foot.font = Font.systemFont(9); foot.textColor = old ? C.warn : C.sub;
   w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
   return w;
