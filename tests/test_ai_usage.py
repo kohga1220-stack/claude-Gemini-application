@@ -139,6 +139,21 @@ class ClaudeToken(unittest.TestCase):
         self.assertEqual(masked["claudeAiOauth"]["accessToken"], "<str len=9>")
 
 
+class Outputs(unittest.TestCase):
+    def test_scriptable_dir_is_added_only_when_it_exists(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            orig = (au.LOCAL_DIR, au.ICLOUD_DIR, au.SCRIPTABLE_DIR)
+            try:
+                au.LOCAL_DIR, au.ICLOUD_DIR = d / "local", d / "none" / "AIUsage"
+                au.SCRIPTABLE_DIR = d / "Scriptable"
+                self.assertEqual(au.default_outputs(), [d / "local" / "usage.json"])
+                au.SCRIPTABLE_DIR.mkdir()
+                self.assertIn(au.SCRIPTABLE_DIR / "usage.json", au.default_outputs())
+            finally:
+                au.LOCAL_DIR, au.ICLOUD_DIR, au.SCRIPTABLE_DIR = orig
+
+
 class Aggregate(unittest.TestCase):
     def test_failure_keeps_previous_as_stale(self):
         prev = {"gemini": {"fetched_at": "t0", "windows": [{"id": "x"}]}}

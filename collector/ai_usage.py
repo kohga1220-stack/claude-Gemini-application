@@ -32,6 +32,9 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 LOCAL_DIR = Path.home() / ".ai-usage"
 ICLOUD_DIR = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "AIUsage"
+# Scriptable 専用の iCloud フォルダ（iPhone の「ファイル」アプリの iCloud Drive/Scriptable）。
+# ウィジェットはここを直接読めるので、ファイルブックマークの登録が不要になる。
+SCRIPTABLE_DIR = Path.home() / "Library" / "Mobile Documents" / "iCloud~dk~simonbs~Scriptable" / "Documents"
 FILENAME = "usage.json"
 
 CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
@@ -370,6 +373,8 @@ def default_outputs() -> list:
     outs = [LOCAL_DIR / FILENAME]
     if ICLOUD_DIR.parent.exists():  # iCloud Drive が有効な Mac のみ
         outs.append(ICLOUD_DIR / FILENAME)
+    if SCRIPTABLE_DIR.is_dir():  # Scriptable の iCloud フォルダが Mac に見えている場合のみ
+        outs.append(SCRIPTABLE_DIR / FILENAME)
     return outs
 
 

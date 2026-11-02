@@ -1,11 +1,10 @@
 // icon-color: deep-blue; icon-glyph: chart-bar;
 // AI Usage ウィジェット（Scriptable 用 / iPhone・Mac 共通）
-// Mac の collector が iCloud Drive/AIUsage/usage.json に書いた値を読んで表示する。
-// 使い方: Scriptable にこのファイルの中身を貼る → ホーム画面に Scriptable ウィジェット(中)を追加
-//        → 長押し > ウィジェットを編集 > Script に「AIUsage」を選ぶ。
+// Mac の collector が iCloud Drive/Scriptable/usage.json に書いた値を読んで表示する。
+// 使い方: Scriptable にこのファイルの中身を貼る（スクリプト名は AIUsage）→ ホーム画面に
+//        Scriptable ウィジェット(中)を追加 → 長押し > ウィジェットを編集 > Script に「AIUsage」を選ぶ。
 
 const CONFIG = {
-  relPath: "AIUsage/usage.json",
   staleMinutes: 30,        // これより古いデータは「古い」表示
   // Gemini 側で表示するグループ。null なら全部（Claude+GPT 枠も）。
   geminiGroups: ["Gemini"],
@@ -21,17 +20,13 @@ const C = {
 };
 
 async function loadData() {
+  // Mac の collector が iCloud Drive/Scriptable/usage.json に書いた値を読む（ブックマーク登録は不要）。
   const fm = FileManager.iCloud();
-  // iCloud Drive/AIUsage は Scriptable 専用フォルダの外にあるので、ファイルブックマーク経由で開く。
-  // 初回だけ Scriptable の設定 > ファイルブックマーク に AIUsage フォルダを「AIUsage」の名前で登録する。
-  let dir;
+  const p = fm.joinPath(fm.documentsDirectory(), "usage.json");
   try {
-    dir = fm.bookmarkedPath("AIUsage");
-  } catch (e) {
-    return { error: "Scriptable の設定 > ファイルブックマーク に、iCloud Drive の AIUsage フォルダを「AIUsage」の名前で登録してください" };
-  }
-  const p = fm.joinPath(dir, "usage.json");
-  try {
+    if (!fm.fileExists(p)) {
+      return { error: "usage.json がありません。Mac で collect を実行し、iCloud の同期を待ってください" };
+    }
     if (!fm.isFileDownloaded(p)) await fm.downloadFileFromiCloud(p);
     return { data: JSON.parse(fm.readString(p)) };
   } catch (e) {

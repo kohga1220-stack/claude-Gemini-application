@@ -10,7 +10,8 @@ Device Board のウィジェットのように、**Claude と Gemini の「5時�
 │   └ Gemini : agy -p /usage --output-format json│
 │        ↓ usage.json（正規化済み）               │
 │   ├ ~/.ai-usage/usage.json ─→ SwiftBar(メニューバー)
-│   └ iCloud Drive/AIUsage/usage.json ─┐          │
+│   ├ iCloud Drive/AIUsage/usage.json            │
+│   └ iCloud Drive/Scriptable/usage.json ─┐       │
 └──────────────────────────────────────┼──────────┘
                                        ↓ iCloud 同期
               iPhone / Mac の Scriptable ウィジェット (iphone/AIUsage.js)
@@ -47,7 +48,7 @@ python3 collector/ai_usage.py show              # 取れた値を確認
 ### 2. iPhone（Mac の Scriptable でも同じ）
 
 1. App Store で **Scriptable** を入れ、新規スクリプト `AIUsage` を作って `iphone/AIUsage.js` の中身を貼る。
-2. Scriptable の **設定 > ファイルブックマーク** に、iCloud Drive の `AIUsage` フォルダを **「AIUsage」** という名前で追加（iCloud Drive 直下は Scriptable 専用フォルダ外のため、この登録が必要）。
+2. ファイルブックマークの登録は**不要**です（ウィジェットは iCloud Drive の `Scriptable` フォルダにある `usage.json` を直接読む）。iPhone の「ファイル」アプリで iCloud Drive/Scriptable に `usage.json` があるか確認してください。
 3. ホーム画面に Scriptable ウィジェット（中サイズ）を追加 → 長押し > ウィジェットを編集 > Script で `AIUsage`。
 
 Gemini の Claude+GPT 枠も出したい場合は `AIUsage.js` の `geminiGroups` を `null` にします。
@@ -61,6 +62,7 @@ Gemini の Claude+GPT 枠も出したい場合は `AIUsage.js` の `geminiGroups
 | `agy が見つかりません` | `ANTIGRAVITY_CLI_PATH` を指定、または PATH を確認 |
 | Gemini が「出力を解釈できません」「バケットがありません」 | `python3 collector/ai_usage.py raw gemini` の結果を確認（`agy` のバージョン更新で形式が変わった可能性） |
 | Claude の accessToken を取得できません | `python3 collector/ai_usage.py diagnose`（トークンの値は出さず、構造だけ表示） |
+| ウィジェットに「usage.json がありません」 | Mac で `python3 collector/ai_usage.py collect` を実行し、出力の `wrote:` に `iCloud~dk~simonbs~Scriptable` を含むパスがあるか確認。なければ Mac のターミナルで `ls ~/Library/Mobile\ Documents/ | grep -i scriptable` |
 | iPhone が「データなし/古い」 | Mac のスリープ・iCloud Drive の同期・`~/.ai-usage/collector.log` を確認 |
 
 ## 開発
